@@ -1,0 +1,15 @@
+Priya Shah
+Materials Scientist
+Ph.D. Materials Science, University of Michigan, 2018
+B.S. Chemical Engineering, IIT Bombay, 2013
+
+Experience
+2018–present  Senior Scientist, grid storage diagnostics group
+Lead a team of four on in-situ impedance diagnostics for lithium-ion modules used in U.S. utility storage. Designed a sensor package now piloted with two independent system operators. Co-authored 11 peer-reviewed papers on battery degradation; 420 citations. Named inventor on two U.S. patents covering cell-level thermal-runaway signatures. DOE ARPA-E subcontract contributor, 2022–2024.
+
+Selected publications
+Shah P, et al. Early detection of lithium plating in grid-scale batteries. Nature Energy, 2023.
+Shah P, et al. Impedance fingerprints of calendar aging. Journal of Power Sources, 2021.
+
+Skills
+Electrochemical impedance spectroscopy, failure analysis, Python, DOE reporting, utility interconnection data.

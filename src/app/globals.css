@@ -1,0 +1,271 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #1b1712;
+  --ink-soft: #4a4338;
+  --paper: #f3eee4;
+  --foam: #faf7f1;
+  --rule: rgba(27, 23, 18, 0.12);
+  --navy: #243f5c;
+  --navy-deep: #1a2f45;
+  --gold: #8a6a32;
+  --danger: #8f2d2d;
+  --ok: #2d5a3d;
+}
+
+@theme inline {
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --font-sans: "Source Sans 3", "Segoe UI", sans-serif;
+  --font-display: Newsreader, Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  background: var(--paper);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  width: min(880px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.brand {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 0;
+}
+
+.brand span {
+  color: var(--navy);
+}
+
+.lede {
+  margin: 0.85rem 0 0;
+  max-width: 36rem;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.stepper {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.75rem 0 1.5rem;
+  flex-wrap: wrap;
+}
+
+.stepper span {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0.35rem 0.6rem;
+  border: 1px solid transparent;
+}
+
+.stepper span[data-on="true"] {
+  color: var(--navy-deep);
+  border-color: var(--rule);
+  background: var(--foam);
+}
+
+.panel {
+  background: var(--foam);
+  border: 1px solid var(--rule);
+  padding: 1.4rem 1.35rem 1.5rem;
+}
+
+.panel h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 500;
+  margin: 0 0 0.45rem;
+}
+
+.panel p.note {
+  margin: 0 0 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+label.field input,
+label.field textarea,
+label.field select {
+  font-weight: 400;
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink);
+  padding: 0.55rem 0.7rem;
+  width: 100%;
+}
+
+label.field textarea {
+  min-height: 5.2rem;
+  resize: vertical;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .row2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+}
+
+.btn {
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: #f7f3ea;
+  padding: 0.55rem 0.95rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--navy-deep);
+}
+
+.btn.danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.err {
+  color: var(--danger);
+  margin: 0.6rem 0 0;
+  font-size: 0.92rem;
+}
+
+.warn {
+  border: 1px solid rgba(138, 106, 50, 0.35);
+  background: rgba(138, 106, 50, 0.08);
+  padding: 0.75rem 0.9rem;
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+}
+
+.option {
+  border: 1px solid var(--rule);
+  padding: 0.95rem 1rem;
+  margin-bottom: 0.7rem;
+  background: #fff;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.option[data-on="true"] {
+  border-color: var(--navy);
+}
+
+.option b {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  margin-bottom: 0.35rem;
+}
+
+.draft {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 0.35rem 0 0.55rem;
+}
+
+.small {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  margin-right: 0.35rem;
+  border: 1px solid var(--rule);
+}
+
+.tag.ok {
+  color: var(--ok);
+  border-color: rgba(45, 90, 61, 0.35);
+}
+
+.tag.no {
+  color: var(--danger);
+  border-color: rgba(143, 45, 45, 0.35);
+}
+
+.list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.disclaimer {
+  margin-top: 2.5rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.file {
+  border: 1px dashed var(--rule);
+  padding: 1rem;
+  background: #fff;
+}

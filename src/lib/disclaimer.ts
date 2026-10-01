@@ -1,0 +1,1 @@
+export const DISCLAIMER = `PetitionPro is drafting software, not a law firm and not a lawyer. It does not determine eligibility, predict USCIS decisions, or represent anyone before USCIS. Output is a working draft. You are responsible for every fact. Do not file language you cannot support with evidence.`;
