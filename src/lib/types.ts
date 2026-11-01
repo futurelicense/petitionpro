@@ -1,3 +1,8 @@
+import type { ProgressItem } from "./framework";
+import type { CriterionItem, PetitionTrack } from "./tracks";
+
+export type { PetitionTrack };
+
 export type RoleType = "researcher" | "entrepreneur" | "practitioner";
 
 export type EndeavorId = "conservative" | "core" | "stretch";
@@ -6,6 +11,8 @@ export type FitChoice = "keep" | "narrow" | "pivot";
 
 export type Step =
   | "disclaimer"
+  | "track"
+  | "field"
   | "intake"
   | "endeavor"
   | "upload"
@@ -57,7 +64,8 @@ export type CvRecord = {
   grantsOrFunding: string[];
   leadership: string[];
   skills: string[];
-  progressTowardEndeavor: string[];
+  progressTowardEndeavor: ProgressItem[];
+  extraordinaryAbility: CriterionItem[];
   gaps: string[];
 };
 
@@ -88,6 +96,28 @@ export type SkeletonsResult = {
   gaps: string[];
 };
 
+export type Eb1aDraft = {
+  area: string;
+  paragraphs: string[];
+  claimedFacts: ClaimSpan[];
+  gaps: string[];
+};
+
+export type OpenSourceMatch = {
+  name: string;
+  url: string;
+  summary: string;
+  frameworkConcept: string;
+  alignment: string;
+  nationalImportance: string;
+  wellPositioning: string;
+};
+
+export type OpenSourceResult = {
+  projects: OpenSourceMatch[];
+  warnings: string[];
+};
+
 export const emptyIntake = (): Intake => ({
   domain: "",
   problem: "",
@@ -108,5 +138,6 @@ export const emptyRecord = (): CvRecord => ({
   leadership: [],
   skills: [],
   progressTowardEndeavor: [],
+  extraordinaryAbility: [],
   gaps: [],
 });

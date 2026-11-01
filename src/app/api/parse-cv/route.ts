@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { extractCvText } from "@/lib/extract";
+import { checkProgress } from "@/lib/framework";
 import { groqJson, groqModel, isGroqConfigured } from "@/lib/groq";
 import { asString, asStringArray, fail } from "@/lib/http";
 import { clipText, redactPii } from "@/lib/pii";
-import { parseSystem, parseUser } from "@/lib/prompts";
+import { parseSystem, parseSystemEb1a, parseUser, parseUserEb1a } from "@/lib/prompts";
+import { parseEb1aSchema, parseSchema } from "@/lib/schemas";
+import { checkCriteria } from "@/lib/tracks";
 import type { CvRecord } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,10 +24,18 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("file");
     const pasted = asString(form.get("cvText"));
+    const track = form.get("track") === "eb1a" ? "eb1a" : "eb2-niw";
     const endeavorSentence = asString(form.get("endeavorSentence"));
-    if (!endeavorSentence) {
+    const fieldArea = asString(form.get("fieldArea"));
+    if (track === "eb2-niw" && !endeavorSentence) {
       return NextResponse.json(
         { error: "Generate a proposed endeavor before uploading a CV." },
+        { status: 400 }
+      );
+    }
+    if (track === "eb1a" && fieldArea.length < 8) {
+      return NextResponse.json(
+        { error: "Name the area of extraordinary ability before uploading a CV." },
         { status: 400 }
       );
     }
@@ -43,15 +54,23 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    const eb1a = track === "eb1a";
     const raw = await groqJson<Record<string, unknown>>({
       messages: [
-        { role: "system", content: parseSystem },
-        { role: "user", content: parseUser(cvText, endeavorSentence) },
+        { role: "system", content: eb1a ? parseSystemEb1a : parseSystem },
+        {
+          role: "user",
+          content: eb1a ? parseUserEb1a(cvText, fieldArea) : parseUser(cvText, endeavorSentence),
+        },
       ],
       json: true,
       model: groqModel(),
       temperature: 0.05,
-      maxTokens: 2200,
+      maxTokens: 2800,
+      jsonSchema: {
+        name: eb1a ? "eb1a_record" : "cv_record",
+        schema: eb1a ? parseEb1aSchema : parseSchema,
+      },
     });
 
     const record: CvRecord = {
@@ -86,7 +105,8 @@ export async function POST(req: Request) {
       grantsOrFunding: asStringArray(raw.grantsOrFunding),
       leadership: asStringArray(raw.leadership),
       skills: asStringArray(raw.skills),
-      progressTowardEndeavor: asStringArray(raw.progressTowardEndeavor),
+      progressTowardEndeavor: eb1a ? [] : checkProgress(raw.progressTowardEndeavor, cvText),
+      extraordinaryAbility: eb1a ? checkCriteria(raw.extraordinaryAbility, cvText) : [],
       gaps: asStringArray(raw.gaps),
     };
 

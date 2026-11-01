@@ -1,3 +1,6 @@
+import { WELL_POSITIONED_FACTORS } from "./framework";
+import { EB1A_CRITERIA } from "./tracks";
+
 const str = { type: "string" } as const;
 
 function obj(
@@ -68,7 +71,20 @@ export const parseSchema = obj(
     grantsOrFunding: stringArray,
     leadership: stringArray,
     skills: stringArray,
-    progressTowardEndeavor: stringArray,
+    progressTowardEndeavor: {
+      type: "array",
+      items: obj(
+        {
+          factor: {
+            type: "string",
+            enum: WELL_POSITIONED_FACTORS.map((factor) => factor.id),
+          },
+          fact: str,
+          cvSpan: str,
+        },
+        ["factor", "fact", "cvSpan"]
+      ),
+    },
     gaps: stringArray,
   },
   [
@@ -82,6 +98,52 @@ export const parseSchema = obj(
     "leadership",
     "skills",
     "progressTowardEndeavor",
+    "gaps",
+  ]
+);
+
+const citedQuote = (idEnum: readonly string[]) =>
+  obj(
+    {
+      criterion: { type: "string", enum: [...idEnum] },
+      fact: str,
+      cvSpan: str,
+    },
+    ["criterion", "fact", "cvSpan"]
+  );
+
+export const parseEb1aSchema = obj(
+  {
+    degrees: parseSchema.properties
+      ? (parseSchema.properties as { degrees: unknown }).degrees
+      : { type: "array" },
+    occupation: str,
+    yearsExperience: str,
+    projects: parseSchema.properties
+      ? (parseSchema.properties as { projects: unknown }).projects
+      : { type: "array" },
+    publications: stringArray,
+    patents: stringArray,
+    grantsOrFunding: stringArray,
+    leadership: stringArray,
+    skills: stringArray,
+    extraordinaryAbility: {
+      type: "array",
+      items: citedQuote(EB1A_CRITERIA.map((criterion) => criterion.id)),
+    },
+    gaps: stringArray,
+  },
+  [
+    "degrees",
+    "occupation",
+    "yearsExperience",
+    "projects",
+    "publications",
+    "patents",
+    "grantsOrFunding",
+    "leadership",
+    "skills",
+    "extraordinaryAbility",
     "gaps",
   ]
 );
@@ -120,6 +182,68 @@ const draft = obj(
     claimedFacts: { type: "array", items: claim },
   },
   ["paragraphs", "claimedFacts"]
+);
+
+export const openSourceDiscoverSchema = obj(
+  {
+    subject: str,
+    angles: stringArray,
+  },
+  ["subject", "angles"]
+);
+
+const openSourceMatch = obj(
+  {
+    index: { type: "integer" },
+    frameworkConcept: str,
+    alignment: str,
+    nationalImportance: str,
+    wellPositioning: str,
+  },
+  [
+    "index",
+    "frameworkConcept",
+    "alignment",
+    "nationalImportance",
+    "wellPositioning",
+  ]
+);
+
+const suggestedMatch = obj(
+  {
+    name: str,
+    url: str,
+    summary: str,
+    frameworkConcept: str,
+    alignment: str,
+    nationalImportance: str,
+    wellPositioning: str,
+  },
+  [
+    "name",
+    "url",
+    "summary",
+    "frameworkConcept",
+    "alignment",
+    "nationalImportance",
+    "wellPositioning",
+  ]
+);
+
+export const openSourceSuggestSchema = obj(
+  {
+    projects: { type: "array", items: suggestedMatch },
+    warnings: stringArray,
+  },
+  ["projects", "warnings"]
+);
+
+export const openSourceSchema = obj(
+  {
+    projects: { type: "array", items: openSourceMatch },
+    warnings: stringArray,
+  },
+  ["projects", "warnings"]
 );
 
 export const skeletonsSchema = obj(

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withCheckedProgress } from "@/lib/framework";
 import { groqJson, groqModel, isGroqConfigured } from "@/lib/groq";
 import { asString, asStringArray, fail } from "@/lib/http";
 import { fitSystem, fitUser } from "@/lib/prompts";
@@ -23,12 +24,15 @@ export async function POST(req: Request) {
       description?: string;
       niFrame?: string;
       record?: CvRecord;
+      cvText?: string;
     };
 
     const sentence = asString(body.sentence);
     const description = asString(body.description);
     const niFrame = asString(body.niFrame);
-    const record = body.record;
+    const record = body.record
+      ? withCheckedProgress(body.record, asString(body.cvText))
+      : undefined;
     if (!sentence || !description || !record) {
       return NextResponse.json(
         { error: "Endeavor and parsed CV record are required." },
