@@ -1,22 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Studio" },
+  { href: "/studio", label: "Studio" },
   { href: "/project", label: "Projects" },
-  { href: "/cases", label: "Cases" },
+  { href: "/cases", label: "Overview" },
+  { href: "/inquiries", label: "Inquiries" },
   { href: "/ideas", label: "Idea bank" },
   { href: "/requests", label: "Request Tank" },
 ];
 
 export function Brand({ lede, tone = "intro" }: { lede: string; tone?: "intro" | "name" }) {
   const path = usePathname();
+  const router = useRouter();
+  const [signOutError, setSignOutError] = useState(false);
 
   async function signOut() {
-    await fetch("/api/admin/logout", { method: "POST" }).catch(() => undefined);
-    window.location.assign("/login");
+    setSignOutError(false);
+    try {
+      const response = await fetch("/api/admin/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Sign-out failed");
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setSignOutError(true);
+    }
   }
 
   return (
@@ -43,6 +54,7 @@ export function Brand({ lede, tone = "intro" }: { lede: string; tone?: "intro" |
           <button className="signout" type="button" onClick={signOut}>
             Sign out
           </button>
+          {signOutError && <p className="err" role="alert">Could not sign out. Please try again.</p>}
         </div>
       </header>
       {tone === "name" ? <h2 className="lede casename">{lede}</h2> : <p className="lede">{lede}</p>}

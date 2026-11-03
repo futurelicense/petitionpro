@@ -1,45 +1,82 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 export const ADMIN_COOKIE = "petitionpro-admin";
+const SESSION_SECONDS = 60 * 60 * 12;
 
-const FALLBACK_USER = "admin";
-const FALLBACK_PASSWORD = "admin30";
-const FALLBACK_SECRET = "petitionpro-local-admin-session";
-
-function adminUser() {
-  return process.env.ADMIN_USER?.trim() || FALLBACK_USER;
+function config() {
+  const username = process.env.ADMIN_USER?.trim();
+  const password = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  if (!username || !password?.trim() || !secret || secret.length < 32) return null;
+  return { username, password, secret };
 }
 
-function adminPassword() {
-  return process.env.ADMIN_PASSWORD || FALLBACK_PASSWORD;
+export function isAdminConfigured() {
+  return config() !== null;
 }
 
-function sessionSecret() {
-  return process.env.ADMIN_SESSION_SECRET || FALLBACK_SECRET;
-}
-
-function digest(value: string) {
-  return createHmac("sha256", sessionSecret()).update(value).digest();
-}
-
-function sameSecret(left: string, right: string) {
-  return timingSafeEqual(digest(left), digest(right));
+function equal(left: string, right: string) {
+  const a = createHash("sha256").update(left).digest();
+  const b = createHash("sha256").update(right).digest();
+  return timingSafeEqual(a, b);
 }
 
 export function credentialsMatch(username: string, password: string) {
-  return sameSecret(username, adminUser()) && sameSecret(password, adminPassword());
+  const settings = config();
+  return Boolean(settings && equal(username, settings.username) && equal(password, settings.password));
+}
+
+function sessionPath(value: string) {
+  const directory = process.env.ADMIN_SESSION_DIR || join(process.cwd(), ".data", "admin-sessions");
+  const id = createHash("sha256").update(value).digest("hex");
+  return { directory, file: join(directory, `${id}.json`) };
+}
+
+function credentialVersion(settings: NonNullable<ReturnType<typeof config>>) {
+  return createHmac("sha256", settings.secret)
+    .update(JSON.stringify([settings.username, settings.password]))
+    .digest("hex");
 }
 
 export function sessionValue() {
-  return createHmac("sha256", sessionSecret()).update(`petitionpro-admin:${adminUser()}`).digest("hex");
+  const settings = config();
+  if (!settings) throw new Error("Admin sign-in is not configured.");
+  const value = randomBytes(32).toString("hex");
+  const { directory, file } = sessionPath(value);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  writeFileSync(file, JSON.stringify({
+    expiresAt: Date.now() + SESSION_SECONDS * 1000,
+    credentialVersion: credentialVersion(settings),
+  }), { mode: 0o600, flag: "wx" });
+  return value;
+}
+
+export function revokeSession(value: string | undefined) {
+  if (!value || !/^[a-f0-9]{64}$/.test(value)) return;
+  try {
+    unlinkSync(sessionPath(value).file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
 }
 
 export function sessionValid(value: string | undefined) {
-  if (!value) return false;
-  const expected = Buffer.from(sessionValue());
-  const actual = Buffer.from(value);
-  if (actual.length !== expected.length) return false;
-  return timingSafeEqual(actual, expected);
+  const settings = config();
+  if (!settings || !value || !/^[a-f0-9]{64}$/.test(value)) return false;
+  try {
+    // Session records are mutable runtime data, never deployment assets.
+    const session = JSON.parse(readFileSync(/* turbopackIgnore: true */ sessionPath(value).file, "utf8")) as {
+      expiresAt?: number;
+      credentialVersion?: string;
+    };
+    if (typeof session.expiresAt !== "number" || session.expiresAt <= Date.now()) return false;
+    return typeof session.credentialVersion === "string" &&
+      equal(session.credentialVersion, credentialVersion(settings));
+  } catch {
+    return false;
+  }
 }
 
 export function safeNext(value: string | null | undefined) {
@@ -60,6 +97,6 @@ export function adminCookieOptions() {
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 12,
+    maxAge: SESSION_SECONDS,
   };
 }

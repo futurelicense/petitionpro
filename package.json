@@ -6,7 +6,8 @@
     "dev": "next dev --port 3040",
     "build": "next build",
     "start": "next start --port 3040",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node tests/regressions.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

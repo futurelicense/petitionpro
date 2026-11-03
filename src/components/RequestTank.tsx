@@ -28,10 +28,15 @@ export function RequestTank({ initialCaseId = "" }: { initialCaseId?: string }) 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setItems(loadRequests());
-    setCases(loadCases());
-    setOpenedOn((current) => current || todayISO());
-    setHydrated(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setItems(loadRequests());
+      setCases(loadCases());
+      setOpenedOn((current) => current || todayISO());
+      setHydrated(true);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const ordered = useMemo(() => sortRequests(items), [items]);

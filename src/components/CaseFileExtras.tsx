@@ -10,12 +10,17 @@ export function CaseFileExtras({ caseId }: { caseId: string }) {
   const [readings, setReadings] = useState<Array<{ title: string; action: IdeaAction }>>([]);
 
   useEffect(() => {
-    setRequests(requestsForCase(caseId));
-    setReadings(
-      loadIdeas().flatMap((idea) =>
-        idea.actions.filter((action) => action.caseId === caseId).map((action) => ({ title: idea.title, action }))
-      )
-    );
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setRequests(requestsForCase(caseId));
+      setReadings(
+        loadIdeas().flatMap((idea) =>
+          idea.actions.filter((action) => action.caseId === caseId).map((action) => ({ title: idea.title, action }))
+        )
+      );
+    });
+    return () => { cancelled = true; };
   }, [caseId]);
 
   return (

@@ -1,7 +1,8 @@
+import { limitedJson } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { quoteFoundInCv, withCheckedProgress } from "@/lib/framework";
 import { groqJson, groqModel, isGroqConfigured } from "@/lib/groq";
-import { asBool, asString, asStringArray, fail } from "@/lib/http";
+import { asString, asStringArray, fail } from "@/lib/http";
 import { clipText, redactPii } from "@/lib/pii";
 import { eb1aDraftSystem, eb1aDraftUser, skeletonsSystem, skeletonsUser } from "@/lib/prompts";
 import { checkCriteria } from "@/lib/tracks";
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = (await req.json()) as {
+    const body = (await limitedJson(req)) as {
       track?: string;
       area?: string;
       continueWork?: string;
@@ -86,8 +87,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       chosenSentence,
-      wellPositioning: asDraft(raw.wellPositioning),
-      nationalImportance: asDraft(raw.nationalImportance),
+      wellPositioning: asDraft(raw.wellPositioning, cvText),
+      nationalImportance: asDraft(raw.nationalImportance, cvText),
       gaps: asStringArray(raw.gaps),
     });
   } catch (error) {
@@ -131,19 +132,16 @@ async function draftEb1a(body: {
     temperature: 0.25,
     maxTokens: 3500,
   });
-  const draft = asDraft(raw);
+  const draft = asDraft(raw, cvText);
   return NextResponse.json({
     area,
     paragraphs: draft.paragraphs,
-    claimedFacts: draft.claimedFacts.map((fact) => ({
-      ...fact,
-      supported: quoteFoundInCv(cvText, fact.cvSpan),
-    })),
+    claimedFacts: draft.claimedFacts,
     gaps: asStringArray(raw.gaps),
   });
 }
 
-function asDraft(raw: unknown): SkeletonDraft {
+function asDraft(raw: unknown, cvText: string): SkeletonDraft {
   if (!raw || typeof raw !== "object") {
     return { paragraphs: [], claimedFacts: [] };
   }
@@ -158,7 +156,7 @@ function asDraft(raw: unknown): SkeletonDraft {
           {
             claim,
             cvSpan: asString(item.cvSpan),
-            supported: asBool(item.supported),
+            supported: quoteFoundInCv(cvText, asString(item.cvSpan)),
           },
         ];
       })

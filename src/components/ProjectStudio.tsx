@@ -111,7 +111,9 @@ function ProjectSession({
           };
           const savedTrack = asTrack(data.track);
           const savedEndeavor = data.endeavor?.trim() || "";
-          if (savedTrack === nextTrack && (!nextText || nextText === savedEndeavor)) {
+          if (((!seededTrack && !studioTrack) || savedTrack === nextTrack) && (!nextText || nextText === savedEndeavor)) {
+            setTrack(savedTrack);
+            setEndeavor(nextText || savedEndeavor);
             setSource(data.source === "suggested" ? "suggested" : "github");
             const restore = (bucket?: Bucket): Bucket => ({
               ...emptyBucket(),

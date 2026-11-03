@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PublicBrand } from "@/components/PublicBrand";
+import { AssessmentNextSteps } from "@/components/AssessmentNextSteps";
+import { FREE_STUDIO_STORAGE } from "@/lib/inquiry-types";
 import { Brand } from "@/components/Brand";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import {
@@ -67,11 +70,15 @@ type Persist = {
   choice: FitChoice | null;
   skeletons: SkeletonsResult | null;
   eb1aDraft?: Eb1aDraft | null;
+  originalFileName?: string;
 };
 
 const STORAGE = "petitionpro-v1";
 
-export function Studio() {
+export function Studio({ publicMode = false }: { publicMode?: boolean } = {}) {
+  const storageKey = publicMode ? FREE_STUDIO_STORAGE : STORAGE;
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [originalFileName, setOriginalFileName] = useState("");
   const [step, setStep] = useState<Step>("disclaimer");
   const [track, setTrack] = useState<PetitionTrack>("eb2-niw");
   const [trackReturn, setTrackReturn] = useState<Step>("intake");
@@ -95,42 +102,49 @@ export function Studio() {
   const selected = options.find((o) => o.id === selectedId) ?? options[0] ?? null;
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE);
-      if (!raw) {
-        setHydrated(true);
-        return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) {
+          setHydrated(true);
+          return;
+        }
+        const data = JSON.parse(raw) as Persist;
+        setOriginalFileName(data.originalFileName || "");
+        const savedTrack = data.track === "eb1a" ? "eb1a" : "eb2-niw";
+        setStep(data.step || "disclaimer");
+        setTrack(savedTrack);
+        setEb1aArea(data.eb1aArea || "");
+        setEb1aContinue(data.eb1aContinue || "");
+        setIntake(data.intake || emptyIntake());
+        setOptions(data.options || []);
+        setWarnings(data.warnings || []);
+        setSelectedId(data.selectedId);
+        const savedCv = data.cvText || "";
+        const checked = withCheckedProgress(data.record || emptyRecord(), savedCv);
+        setRecord({
+          ...checked,
+          extraordinaryAbility: checkCriteria(data.record?.extraordinaryAbility, savedCv),
+        });
+        setCvText(savedCv);
+        setFit(data.fit);
+        setChoice(data.choice);
+        setSkeletons(data.skeletons);
+        setEb1aDraft(data.eb1aDraft ?? null);
+      } catch {
+        /* ignore */
       }
-      const data = JSON.parse(raw) as Persist;
-      const savedTrack = data.track === "eb1a" ? "eb1a" : "eb2-niw";
-      setStep(data.step || "disclaimer");
-      setTrack(savedTrack);
-      setEb1aArea(data.eb1aArea || "");
-      setEb1aContinue(data.eb1aContinue || "");
-      setIntake(data.intake || emptyIntake());
-      setOptions(data.options || []);
-      setWarnings(data.warnings || []);
-      setSelectedId(data.selectedId);
-      const savedCv = data.cvText || "";
-      const checked = withCheckedProgress(data.record || emptyRecord(), savedCv);
-      setRecord({
-        ...checked,
-        extraordinaryAbility: checkCriteria(data.record?.extraordinaryAbility, savedCv),
-      });
-      setCvText(savedCv);
-      setFit(data.fit);
-      setChoice(data.choice);
-      setSkeletons(data.skeletons);
-      setEb1aDraft(data.eb1aDraft ?? null);
-    } catch {
-      /* ignore */
-    }
-    setHydrated(true);
-  }, []);
+      setHydrated(true);
+    });
+    return () => { cancelled = true; };
+  }, [storageKey]);
 
   useEffect(() => {
     if (!hydrated) return;
     const data: Persist = {
+      originalFileName,
       step,
       track,
       eb1aArea,
@@ -146,8 +160,10 @@ export function Studio() {
       skeletons,
       eb1aDraft,
     };
-    localStorage.setItem(STORAGE, JSON.stringify(data));
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* Keep drafting if browser storage is full. */ }
   }, [
+    originalFileName,
+    storageKey,
     hydrated,
     step,
     track,
@@ -227,6 +243,8 @@ export function Studio() {
       const res = await fetch("/api/parse-cv", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not parse CV.");
+      setCvFile(file || null);
+      setOriginalFileName(file?.name || "");
       const parsedCv = data.cvText || "";
       const checked = withCheckedProgress(data.record || emptyRecord(), parsedCv);
       setRecord({
@@ -333,7 +351,10 @@ export function Studio() {
   }
 
   function reset() {
-    localStorage.removeItem(STORAGE);
+    try { localStorage.removeItem(storageKey); } catch { /* Reset in memory when storage is unavailable. */ }
+    setCvFile(null);
+    setOriginalFileName("");
+    setPasteCv("");
     setStep("disclaimer");
     setTrack("eb2-niw");
     setEb1aArea("");
@@ -471,16 +492,17 @@ export function Studio() {
 
   return (
     <main className="shell">
-      <Brand lede={lede} />
+      {publicMode ? <PublicBrand lede="A free starting point for your proposed endeavor and CV-based evidence plan." /> : <Brand lede={lede} />}
+      {publicMode && step === "disclaimer" && <section className="landing-hero"><p className="kicker ink">Free · No account required</p><h2>Define your endeavor.<br />See what your experience supports.</h2><p>Generate proposed endeavor options, upload your CV, and get working drafts for well positioning and national importance. Then choose DIY or ask a consultant to review your case.</p><ol className="landing-steps"><li>Describe your work</li><li>Upload your CV</li><li>Choose your next step</li></ol></section>}
 
       <nav className="stepper" aria-label="Progress">
-        {steps.map((s) => (
+        {steps.filter((item) => !publicMode || item.id !== "track").map((s) => (
           <span key={s.id} data-on={step === s.id ? "true" : "false"}>
             {s.label}
           </span>
         ))}
       </nav>
-      {step !== "disclaimer" && step !== "track" && (
+      {!publicMode && step !== "disclaimer" && step !== "track" && (
         <div className="actions band">
           <button
             className="btn ghost"
@@ -499,13 +521,10 @@ export function Studio() {
         <section className="panel">
           <h2>Before you draft</h2>
           <p className="note">{DISCLAIMER}</p>
-          <p className="note">
-            The next step chooses the classification. EB-2 NIW and EB-1A ask
-            different questions, and the studio keeps those frameworks apart.
-          </p>
+          <p className="note">{publicMode ? "Your CV is processed to generate this assessment. Sharing it with consultants is a separate choice after you see the result." : "The next step chooses the classification. EB-2 NIW and EB-1A ask different questions, and the studio keeps those frameworks apart."}</p>
           <div className="actions">
-            <button className="btn" type="button" onClick={() => setStep("track")}>
-              I understand — continue
+            <button className="btn" type="button" onClick={() => setStep(publicMode ? "intake" : "track")}>
+              {publicMode ? "Start my free assessment" : "I understand — continue"}
             </button>
           </div>
         </section>
@@ -611,7 +630,7 @@ export function Studio() {
           </label>
           {error && <p className="err">{error}</p>}
           <div className="actions">
-            <button className="btn ghost" type="button" onClick={() => setStep("track")}>
+            <button className="btn ghost" type="button" onClick={() => setStep(publicMode ? "intake" : "track")}>
               Back
             </button>
             {eb1aArea.trim().length >= 8 && (
@@ -755,12 +774,12 @@ export function Studio() {
             <button className="btn ghost" type="button" onClick={() => setStep("intake")}>
               Edit parameters
             </button>
-            <Link
+            {!publicMode && <Link
               className="btn ghost"
               href={`/project?track=eb2-niw&endeavor=${encodeURIComponent(selected.sentence)}`}
             >
               Tailored projects
-            </Link>
+            </Link>}
             <button className="btn" type="button" onClick={() => setStep("upload")}>
               Upload CV
             </button>
@@ -1115,6 +1134,10 @@ export function Studio() {
         </section>
       )}
 
+      {publicMode && step === "skeletons" && skeletons && selected && <AssessmentNextSteps
+        endeavor={skeletons.chosenSentence} report={exportText} cvText={cvText} cvFile={cvFile}
+        originalFileName={originalFileName} intake={intake} nationalImportance={selected.nationalImportanceFrame}
+      />}
       <footer className="disclaimer">{DISCLAIMER}</footer>
     </main>
   );

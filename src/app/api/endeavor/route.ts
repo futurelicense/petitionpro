@@ -1,3 +1,4 @@
+import { limitedJson } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { groqJson, groqModel, isGroqConfigured } from "@/lib/groq";
 import { asString, asStringArray, fail } from "@/lib/http";
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = (await req.json()) as Partial<Intake>;
+    const body = (await limitedJson(req)) as Partial<Intake>;
     const intake: Intake = {
       domain: asString(body.domain),
       problem: asString(body.problem),

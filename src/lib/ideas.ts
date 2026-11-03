@@ -4,7 +4,6 @@ import {
   milestoneState,
   pathwayLabel,
   stageLabel,
-  workingPathway,
   type ClientCase,
 } from "./cases";
 

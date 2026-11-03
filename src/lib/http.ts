@@ -1,3 +1,4 @@
+import { InquiryError } from "./inquiries";
 import { NextResponse } from "next/server";
 import { GroqError } from "@/lib/groq";
 
@@ -5,7 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export function fail(error: unknown) {
-  if (error instanceof GroqError) {
+  if (error instanceof InquiryError || error instanceof GroqError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
   const message = error instanceof Error ? error.message : "Request failed.";

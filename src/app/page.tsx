@@ -1,19 +1,9 @@
-"use client";
+import type { Metadata } from "next";
+import { Studio } from "@/components/Studio";
 
-import dynamic from "next/dynamic";
+export const metadata: Metadata = {
+  title: "Free proposed endeavor and CV assessment — PetitionPro",
+  description: "Generate proposed endeavor options and CV-based working drafts, then continue DIY or request a consultant review.",
+};
 
-const Studio = dynamic(() => import("@/components/Studio").then((m) => m.Studio), {
-  ssr: false,
-  loading: () => (
-    <main className="shell">
-      <h1 className="brand">
-        Petition<span>Pro</span>
-      </h1>
-      <p className="lede">Loading studio…</p>
-    </main>
-  ),
-});
-
-export default function Home() {
-  return <Studio />;
-}
+export default function Home() { return <Studio publicMode />; }

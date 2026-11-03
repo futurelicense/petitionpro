@@ -1,3 +1,4 @@
+import { limitedJson } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { withCheckedProgress } from "@/lib/framework";
 import { groqJson, groqModel, isGroqConfigured } from "@/lib/groq";
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = (await req.json()) as {
+    const body = (await limitedJson(req)) as {
       sentence?: string;
       description?: string;
       niFrame?: string;

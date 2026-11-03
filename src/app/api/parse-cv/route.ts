@@ -1,3 +1,4 @@
+import { limitedFormData } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { extractCvText } from "@/lib/extract";
 import { checkProgress } from "@/lib/framework";
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const form = await req.formData();
+    const form = await limitedFormData(req);
     const file = form.get("file");
     const pasted = asString(form.get("cvText"));
     const track = form.get("track") === "eb1a" ? "eb1a" : "eb2-niw";

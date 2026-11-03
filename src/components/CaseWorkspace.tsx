@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RequiredProgress } from "@/components/RequiredProgress";
+import { CaseTimeline } from "@/components/CaseTimeline";
 import { Brand } from "@/components/Brand";
+import { MilestoneCostIntake } from "@/components/MilestoneCostIntake";
+import { costTotals, usd } from "@/lib/costs";
 import { CaseFileExtras } from "@/components/CaseFileExtras";
 import { DISCLAIMER } from "@/lib/disclaimer";
 import {
@@ -14,7 +18,6 @@ import {
   checkCvQuotes,
   checklistCounts,
   closePeriod,
-  cvOnFile,
   endeavorReady,
   loadCases,
   lineDone,
@@ -25,6 +28,7 @@ import {
   positioningReady,
   profileReady,
   removeCase,
+  replaceCaseCv,
   stageLabel,
   stageReady,
   startPeriod,
@@ -40,6 +44,7 @@ import {
 
 export function CaseWorkspace({ id }: { id: string }) {
   const router = useRouter();
+  const cvReadVersion = useRef(0);
   const [matter, setMatter] = useState<ClientCase | null>(null);
   const [missing, setMissing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -50,21 +55,27 @@ export function CaseWorkspace({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const found = loadCases().find((item) => item.id === id) ?? null;
-    setMatter(found);
-    setMissing(!found);
-    if (found) setView(found.stage);
-    setHydrated(true);
+    let cancelled = false;
+    cvReadVersion.current += 1;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const found = loadCases().find((item) => item.id === id) ?? null;
+      setMatter(found);
+      setMissing(!found);
+      if (found) setView(found.stage);
+      setHydrated(true);
+    });
+    return () => { cancelled = true; cvReadVersion.current += 1; };
   }, [id]);
 
   useEffect(() => {
-    if (!hydrated || !matter) return;
+    if (!hydrated || !matter || matter.id !== id) return;
     try {
       upsertCase(matter);
     } catch {
-      setError("This browser could not store the update.");
+      queueMicrotask(() => setError("This browser could not store the update."));
     }
-  }, [hydrated, matter]);
+  }, [hydrated, matter, id]);
 
   if (!hydrated) {
     return (
@@ -94,6 +105,7 @@ export function CaseWorkspace({ id }: { id: string }) {
   const editable = Boolean(period);
   const currentIndex = STAGES.findIndex((stage) => stage.id === matter.stage);
   const counts = checklistCounts(matter);
+  const costs = costTotals(matter.milestones);
   const pathway = workingPathway(matter);
   const quotes = pathway === "eb1a" ? matter.quotesEb1a : matter.quotesEb2;
 
@@ -160,15 +172,8 @@ export function CaseWorkspace({ id }: { id: string }) {
             <dd>{counts.requiredTotal > 0 ? `${counts.requiredMet} of ${counts.requiredTotal}` : "Not open"}</dd>
           </div>
         </dl>
-        {counts.requiredTotal > 0 && (
-          <div
-            className="meter"
-            style={{ ["--fill" as string]: `${Math.round((counts.requiredMet / counts.requiredTotal) * 100)}%` }}
-          >
-            <span>Required complete</span>
-            <span className="meter-track" />
-          </div>
-        )}
+        <RequiredProgress matter={matter} />
+        <CaseTimeline matter={matter} />
         <p className="fileflags">
           <span className={matter.readyForDraft ? "tag ok" : "tag"}>
             {matter.readyForDraft ? "Ready for petition draft" : "Draft not marked ready"}
@@ -176,11 +181,8 @@ export function CaseWorkspace({ id }: { id: string }) {
         </p>
         {period ? (
           <div className="periodstrip">
-            <p className="small">
-              Period {period.number} opened {period.openedAt.slice(0, 10)} at {stageLabel(period.stageAtOpen)}.
-            </p>
             <details className="periodclose">
-              <summary>Close period</summary>
+              <summary>Finish this review period</summary>
               <label className="field">
                 What changed this period
                 <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Documents added, ratings changed, endeavor revised" />
@@ -383,15 +385,19 @@ export function CaseWorkspace({ id }: { id: string }) {
           <h2>CV profile</h2>
           <p className="note">
             Add the CV, paste any quote you want filed, then run the check. A
-            quote counts when it is found in the pasted text. An empty factor
-            or criterion stays a gap.
+            quote counts when it is found in the pasted text. For PDF and DOCX
+            files, paste the new CV text below after selecting the file. An empty
+            factor or criterion stays a gap.
           </p>
           <label className="field">
             CV file name
             <input
               disabled={!editable}
               value={matter.cvFileName}
-              onChange={(event) => update({ cvFileName: event.target.value, cvChecked: false })}
+              onChange={(event) => {
+                cvReadVersion.current += 1;
+                setMatter(replaceCaseCv(matter, event.target.value));
+              }}
               placeholder="The file name in the client folder"
             />
           </label>
@@ -403,12 +409,16 @@ export function CaseWorkspace({ id }: { id: string }) {
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (!file) return;
-                const apply = (text: string) =>
-                  update({ cvFileName: file.name, cvText: text || matter.cvText, cvChecked: false });
+                const version = ++cvReadVersion.current;
+                setMatter(replaceCaseCv(matter, file.name));
+                setError(null);
                 if (file.type.startsWith("text") || /\.(txt|md)$/i.test(file.name)) {
-                  void file.text().then(apply);
-                } else {
-                  apply(matter.cvText);
+                  void file.text().then((text) => {
+                    if (version !== cvReadVersion.current) return;
+                    setMatter((current) => current ? replaceCaseCv(current, file.name, text) : current);
+                  }).catch(() => {
+                    if (version === cvReadVersion.current) setError("Could not read this CV. Paste its text below.");
+                  });
                 }
               }}
             />
@@ -418,7 +428,10 @@ export function CaseWorkspace({ id }: { id: string }) {
             <textarea
               disabled={!editable}
               value={matter.cvText}
-              onChange={(event) => update({ cvText: event.target.value, cvChecked: false })}
+              onChange={(event) => {
+                cvReadVersion.current += 1;
+                setMatter(replaceCaseCv(matter, matter.cvFileName, event.target.value));
+              }}
               placeholder="Paste the CV when you want quotes checked against it"
             />
           </label>
@@ -449,7 +462,7 @@ export function CaseWorkspace({ id }: { id: string }) {
             <button
               className="btn ghost"
               type="button"
-              disabled={!editable || !cvOnFile(matter)}
+              disabled={!editable || matter.cvText.trim().length < 80}
               onClick={() => setMatter(checkCvQuotes(matter))}
             >
               {matter.cvChecked ? "Quote check ran" : "Run quote check"}
@@ -510,7 +523,7 @@ export function CaseWorkspace({ id }: { id: string }) {
               Ready for the {pathwayLabel(matter.pathway, matter.activePathway)} petition draft.
               This is a case status. It does not say the client qualifies or that USCIS will approve.
               <div className="actions">
-                <Link className="btn ghost" href="/">
+                <Link className="btn ghost" href="/studio">
                   Open the studio
                 </Link>
                 {matter.endeavorSentence.trim() && pathway && (
@@ -527,23 +540,23 @@ export function CaseWorkspace({ id }: { id: string }) {
         </section>
       )}
 
+      <section className="panel case-costs" aria-label="Case cost summary">
+        <h2>Case costs</h2>
+        <p className="note">Project expenses across all well-positioning milestones, including both pathways and items later left out. All amounts are in USD.</p>
+        <dl className="facts">
+          <div><dt>Estimated</dt><dd>{usd(costs.estimated)}</dd></div>
+          <div><dt>Actual</dt><dd>{usd(costs.actual)}</dd></div>
+          <div><dt>Paid to date</dt><dd>{usd(costs.paid)}</dd></div>
+          <div><dt>Outstanding</dt><dd>{usd(costs.outstanding)}</dd></div>
+        </dl>
+        <p className="small">{costs.recorded} milestones with cost records. {costs.actualUnknown > 0 ? `${costs.actualUnknown} still need an actual amount; totals include entered amounts only.` : "Unknown amounts are excluded from totals."}</p>
+        {costs.advance > 0 && <p className="small">Advance payments or credit: {usd(costs.advance)}. These do not offset balances owed on other milestones.</p>}
+        {view === "positioning" ? <p className="small">Open Cost intake on a milestone to record or update its expense. Use Save cost to apply changes.</p> : <p className="small">Cost intake is available on each milestone in Well positioning.</p>}
+      </section>
+
+      {matter.assessmentReport && <section className="panel"><details><summary>Original free assessment</summary><pre className="assessment-report">{matter.assessmentReport}</pre></details>{matter.sourceInquiryId && <a className="btn ghost" href={`/api/admin/inquiries/${matter.sourceInquiryId}/cv`}>Download submitted CV</a>}</section>}
       <CaseFileExtras caseId={matter.id} />
 
-      {matter.periods.some((item) => item.closedAt) && (
-        <section className="panel" style={{ marginTop: "1rem" }}>
-          <h2>Period history</h2>
-          {[...matter.periods].reverse().filter((item) => item.closedAt).map((item) => (
-            <article key={item.id} className="card">
-              <b>Period {item.number}</b>
-              <p className="small">
-                {item.openedAt.slice(0, 10)} to {item.closedAt?.slice(0, 10)} · next review {item.nextReview}
-              </p>
-              <p className="small">{item.summary}</p>
-              <p>{item.note}</p>
-            </article>
-          ))}
-        </section>
-      )}
 
       <div className="actions">
         <button
@@ -602,7 +615,7 @@ function gateCopy(matter: ClientCase): string {
     return "Save an endeavor of a few sentences, or a field of at least 8 characters.";
   }
   if (matter.stage === "pathway" && !pathwayReady(matter)) return "Choose the pathway and save the wording it uses.";
-  if (matter.stage === "cv") return "Add the CV and run the quote check.";
+  if (matter.stage === "cv") return "Add the CV text and run the quote check.";
   return "";
 }
 
@@ -666,6 +679,12 @@ function MilestoneCard({
           <span>Leave this optional item out</span>
         </label>
       )}
+      <MilestoneCostIntake
+        key={milestone.cost?.updatedAt ?? "new"}
+        cost={milestone.cost}
+        editable={editable}
+        onSave={(cost) => onChange({ ...milestone, cost })}
+      />
     </article>
   );
 }

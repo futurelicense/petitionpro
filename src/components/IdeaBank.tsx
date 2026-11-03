@@ -22,18 +22,30 @@ export function IdeaBank() {
   const [source, setSource] = useState("");
   const [note, setNote] = useState("");
   const [caseByIdea, setCaseByIdea] = useState<Record<string, string>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setIdeas(loadIdeas());
-    setCases(loadCases());
-    setHydrated(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIdeas(loadIdeas());
+      setCases(loadCases());
+      setHydrated(true);
+    });
+    return () => { cancelled = true; };
   }, []);
 
-  function persist(next: Idea[]) {
-    setIdeas(next);
-    saveIdeas(next);
+  function persist(change: (current: Idea[]) => Idea[]): boolean {
+    try {
+      const next = change(loadIdeas());
+      saveIdeas(next);
+      setIdeas(next);
+      return true;
+    } catch {
+      setError("This browser could not store the update.");
+      return false;
+    }
   }
 
   function addIdea() {
@@ -41,21 +53,21 @@ export function IdeaBank() {
       setError("Add a title and a note of at least a sentence.");
       return;
     }
-    persist([createIdea({ title, source, note }), ...ideas]);
+    if (!persist((current) => [createIdea({ title, source, note }), ...current])) return;
     setTitle("");
     setSource("");
     setNote("");
     setError(null);
   }
 
-  async function useOnCase(idea: Idea) {
+  async function readOnCase(idea: Idea) {
     const caseId = caseByIdea[idea.id] || "";
     const matter = cases.find((item) => item.id === caseId);
     if (!matter) {
       setError("Choose the case this note should be read against.");
       return;
     }
-    setBusyId(idea.id);
+    setBusyIds((current) => ({ ...current, [idea.id]: true }));
     setError(null);
     try {
       const response = await fetch("/api/idea-action", {
@@ -68,7 +80,6 @@ export function IdeaBank() {
         | null;
       if (!response.ok || !data?.insight || !data.recommendation || !data.suggestion) {
         setError(data?.error || "The reading did not come back.");
-        setBusyId(null);
         return;
       }
       const action: IdeaAction = {
@@ -80,11 +91,11 @@ export function IdeaBank() {
         recommendation: data.recommendation,
         suggestion: data.suggestion,
       };
-      persist(ideas.map((item) => (item.id === idea.id ? { ...item, actions: [action, ...item.actions] } : item)));
+      persist((current) => current.map((item) => (item.id === idea.id ? { ...item, actions: [action, ...item.actions] } : item)));
     } catch {
       setError("The reading did not come back.");
     } finally {
-      setBusyId(null);
+      setBusyIds((current) => ({ ...current, [idea.id]: false }));
     }
   }
 
@@ -141,10 +152,10 @@ export function IdeaBank() {
               </label>
             </div>
             <div className="actions">
-              <button className="btn" type="button" disabled={busyId === idea.id} onClick={() => void useOnCase(idea)}>
-                {busyId === idea.id ? "Reading the file…" : "Use on this case"}
+              <button className="btn" type="button" disabled={busyIds[idea.id]} onClick={() => void readOnCase(idea)}>
+                {busyIds[idea.id] ? "Reading the file…" : "Use on this case"}
               </button>
-              <button className="btn danger" type="button" onClick={() => persist(ideas.filter((item) => item.id !== idea.id))}>
+              <button className="btn danger" type="button" onClick={() => persist((current) => current.filter((item) => item.id !== idea.id))}>
                 Remove note
               </button>
             </div>

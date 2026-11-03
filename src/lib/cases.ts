@@ -1,8 +1,11 @@
 import { WELL_POSITIONED_FACTORS, quoteFoundInCv } from "./framework";
+import type { MilestoneCost } from "./costs";
+import { costTotals, usd } from "./costs";
 import { EB1A_CRITERIA } from "./tracks";
 import type { PetitionTrack } from "./tracks";
 
 export const CASES_STORAGE = "petitionpro-cases-v1";
+export const CASES_CHANGED_EVENT = "petitionpro-cases-changed";
 
 export type StageId = "profile" | "endeavor" | "pathway" | "cv" | "positioning";
 export type Rating = "strong" | "weak" | "missing";
@@ -33,6 +36,7 @@ export type Milestone = {
   serves: string;
   bullets: MilestoneBullet[];
   waivedReason: string;
+  cost?: MilestoneCost;
 };
 
 export type QuoteRow = {
@@ -54,6 +58,8 @@ export type Period = {
 };
 
 export type ClientCase = {
+  sourceInquiryId?: string;
+  assessmentReport?: string;
   id: string;
   name: string;
   email: string;
@@ -88,6 +94,19 @@ export const STAGES: { id: StageId; label: string }[] = [
   { id: "cv", label: "CV profile" },
   { id: "positioning", label: "Well positioning" },
 ];
+
+/** Accept older display labels without dropping a saved case from the workflow. */
+export function caseStage(value: unknown): StageId {
+  if (typeof value !== "string") return "profile";
+  const key = value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const aliases: Record<string, StageId> = {
+    profile: "profile", profileevaluation: "profile",
+    endeavor: "endeavor", proposedendeavor: "endeavor",
+    pathway: "pathway", cv: "cv", cvprofile: "cv",
+    positioning: "positioning", wellpositioning: "positioning", wellpositioned: "positioning",
+  };
+  return aliases[key] ?? "profile";
+}
 
 export const GROUPS: { id: MilestoneGroup; label: string }[] = [
   { id: "prong-1", label: "Prong 1 — national importance" },
@@ -387,7 +406,7 @@ export function cvOnFile(matter: ClientCase): boolean {
 }
 
 export function cvReady(matter: ClientCase): boolean {
-  return cvOnFile(matter) && matter.cvChecked;
+  return cvOnFile(matter) && matter.cvText.trim().length >= 80 && matter.cvChecked;
 }
 
 export function positioningReady(matter: ClientCase): boolean {
@@ -430,7 +449,7 @@ export function reviewStatus(matter: ClientCase, today = todayISO()): "open" | "
   if (openPeriod(matter)) return "open";
   const review = nextReviewDate(matter);
   if (!review) return "unset";
-  return review < today ? "due" : "scheduled";
+  return review <= today ? "due" : "scheduled";
 }
 
 export function todayISO(date = new Date()): string {
@@ -518,12 +537,23 @@ export function advanceStage(matter: ClientCase): ClientCase | null {
   return touch({ ...matter, stage: next.id });
 }
 
+export function replaceCaseCv(matter: ClientCase, fileName: string, text = ""): ClientCase {
+  return touch({
+    ...matter,
+    cvFileName: fileName,
+    cvText: text,
+    cvChecked: false,
+    quotesEb2: matter.quotesEb2.map((row) => ({ ...row, inCv: false })),
+    quotesEb1a: matter.quotesEb1a.map((row) => ({ ...row, inCv: false })),
+  });
+}
+
 export function checkCvQuotes(matter: ClientCase): ClientCase {
   const mark = (rows: QuoteRow[]) =>
     rows.map((row) => ({ ...row, inCv: quoteFoundInCv(matter.cvText, row.quote) }));
   return touch({
     ...matter,
-    cvChecked: true,
+    cvChecked: matter.cvText.trim().length >= 80,
     quotesEb2: mark(matter.quotesEb2),
     quotesEb1a: mark(matter.quotesEb1a),
   });
@@ -533,7 +563,8 @@ export function closePeriod(matter: ClientCase, note: string, nextReview: string
   const current = openPeriod(matter);
   if (!current || note.trim().length < 3 || !nextReview) return null;
   const counts = checklistCounts(matter);
-  const summary = `${stageLabel(matter.stage)}. ${pathwayLabel(matter.pathway, matter.activePathway)}. Required complete: ${counts.requiredMet} of ${counts.requiredTotal}.`;
+  const costs = costTotals(matter.milestones);
+  const summary = `${stageLabel(matter.stage)}. ${pathwayLabel(matter.pathway, matter.activePathway)}. Required complete: ${counts.requiredMet} of ${counts.requiredTotal}. Costs: ${usd(costs.estimated)} estimated; ${usd(costs.actual)} actual; ${usd(costs.paid)} paid; ${usd(costs.outstanding)} outstanding; ${usd(costs.advance)} advance or credit. ${costs.actualUnknown} recorded costs without an actual amount.`;
   return touch({
     ...matter,
     periods: matter.periods.map((period) =>
@@ -575,6 +606,9 @@ export function loadCases(): ClientCase[] {
 
 export function saveCases(cases: ClientCase[]) {
   localStorage.setItem(CASES_STORAGE, JSON.stringify(cases));
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new Event(CASES_CHANGED_EVENT));
+  }
 }
 
 export function upsertCase(matter: ClientCase) {
@@ -592,6 +626,7 @@ export function removeCase(id: string) {
 function normalizeCase(matter: ClientCase): ClientCase {
   return {
     ...matter,
+    stage: caseStage(matter.stage),
     milestones: (matter.milestones ?? []).map((milestone) => ({
       ...milestone,
       bullets: (milestone.bullets ?? []).map((bullet) => ({
